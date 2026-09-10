@@ -1,0 +1,19 @@
+{
+  "name": "@mission/data",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node test/heartbeat.test.mjs && node test/validate.test.mjs && node test/sync.test.mjs"
+  },
+  "dependencies": {
+    "@mission/core": "*",
+    "@supabase/supabase-js": "^2.45.4"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}

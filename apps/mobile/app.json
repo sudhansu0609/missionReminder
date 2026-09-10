@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "Mission Reminder",
+    "slug": "mission-reminder",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "scheme": "missionreminder",
+    "backgroundColor": "#0d1512",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "media.buzzcaf.missionreminder",
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "remote-notification"
+        ]
+      }
+    },
+    "android": {
+      "package": "media.buzzcaf.missionreminder"
+    },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "color": "#4fbf85"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Mission Reminder uses your photos so you can put the things you are working toward on your vision board."
+        }
+      ]
+    ],
+    "extra": {
+      "supabaseUrl": null,
+      "supabaseAnonKey": null
+    }
+  }
+}

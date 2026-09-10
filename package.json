@@ -1,0 +1,22 @@
+{
+  "name": "mission-reminder",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Mission-anchored time blocking. A tree grows while you keep your blocks; it wilts when you drift.",
+  "workspaces": [
+    "packages/*",
+    "apps/desktop",
+    "apps/mobile"
+  ],
+  "scripts": {
+    "start": "npm run desktop",
+    "build:core": "npm run build -w @mission/core && npm run build -w @mission/data",
+    "desktop": "npm run build:core && npm run dev -w @mission/desktop",
+    "mobile": "npm run build:core && npm start -w @mission/mobile",
+    "typecheck": "tsc -b packages/core packages/data && npm run typecheck -w @mission/desktop -w @mission/mobile",
+    "test": "npm run build:core && npm test -w @mission/core && npm test -w @mission/data && node scripts/make-icons.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

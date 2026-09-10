@@ -2,7 +2,7 @@ import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import {
   computeNudges, formatMinuteOfDay, minutesOnDay, pickWhy,
-  type AppState, type Block, type Weekday,
+  type AppState, type Block, type NudgeScreen, type Weekday,
 } from '@mission/core';
 
 /**
@@ -97,6 +97,7 @@ export async function rescheduleAll(state: AppState): Promise<void> {
         content: {
           title: 'Nothing planted today',
           body: withWhy(state, 'idle', 'There is still time for one short block.'),
+          data: { screen: 'today' satisfies NudgeScreen },
         },
         trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: evening },
       });
@@ -111,6 +112,7 @@ export async function rescheduleAll(state: AppState): Promise<void> {
     content: {
       title: 'Week in review',
       body: 'Check your goals against where you said you would be, and set next week\u2019s blocks.',
+      data: { screen: 'review' satisfies NudgeScreen },
     },
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
@@ -142,7 +144,11 @@ async function scheduleGoalDigest(state: AppState): Promise<void> {
 
   for (const n of goalNudges) {
     await Notifications.scheduleNotificationAsync({
-      content: { title: n.title, body: n.why ? `${n.body}\n\n${n.why}` : n.body },
+      content: {
+        title: n.title,
+        body: n.why ? `${n.body}\n\n${n.why}` : n.body,
+        data: { screen: n.screen ?? 'goals' },
+      },
       trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: evening },
     });
   }
@@ -162,7 +168,11 @@ async function scheduleFor(
   const weekday = (((day + dayShift) % 7) + 7) % 7;
 
   await Notifications.scheduleNotificationAsync({
-    content: { title, body: withWhy(state, block.id + day + offsetMinutes, body) },
+    content: {
+      title,
+      body: withWhy(state, block.id + day + offsetMinutes, body),
+      data: { screen: 'today' satisfies NudgeScreen },
+    },
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
       weekday: toExpoWeekday(weekday),
@@ -180,4 +190,16 @@ function withWhy(state: AppState, salt: string, body: string): string {
 
 export async function notifyNow(title: string, body: string): Promise<void> {
   await Notifications.scheduleNotificationAsync({ content: { title, body }, trigger: null });
+}
+
+/**
+ * A tapped reminder should land where it was about. Every scheduled
+ * notification carries the screen the nudge named; this is where it is read.
+ */
+export function onNotificationTap(go: (screen: NudgeScreen) => void): () => void {
+  const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+    const screen = response.notification.request.content.data?.screen;
+    if (typeof screen === 'string') go(screen as NudgeScreen);
+  });
+  return () => sub.remove();
 }

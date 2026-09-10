@@ -60,6 +60,20 @@ export function wasHonouredToday(
   );
 }
 
+/**
+ * The one block a "start the next block" button should start: whichever is
+ * running right now and has not been honoured, otherwise the next one due
+ * today. Null when today has nothing left in it. Shared by the tray menu and
+ * the keyboard shortcut so the two cannot mean different blocks.
+ */
+export function blockToStartNow(
+  blocks: Block[], sessions: Session[], now: Date = new Date(),
+): Block | null {
+  const running = blockInProgress(blocks, now);
+  if (running && !wasHonouredToday(running, sessions, now)) return running;
+  return nextBlockToday(blocks, now)?.block ?? null;
+}
+
 /** Blocks whose start (plus grace) has passed today with nothing to show. */
 export function missedBlocksToday(
   blocks: Block[], sessions: Session[], now: Date = new Date(),

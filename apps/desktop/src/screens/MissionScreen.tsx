@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
-import { uid, type Media, type Mission, type Why } from '@mission/core';
+import React, { useEffect, useState } from 'react';
+import {
+  sameMission, shouldReseed, uid, type Media, type Mission, type Why,
+} from '@mission/core';
 import { useStore } from '../store';
 import { Button, Card, Field } from '../components/ui';
 import { MediaBoard } from '../components/MediaBoard';
@@ -11,7 +13,26 @@ import { MediaBoard } from '../components/MediaBoard';
 export function MissionScreen() {
   const { state, setMission } = useStore();
   const [draft, setDraft] = useState<Mission>(state.mission);
-  const dirty = JSON.stringify(draft) !== JSON.stringify(state.mission);
+  /** The mission the draft was seeded from -- not necessarily the current one. */
+  const [base, setBase] = useState<Mission>(state.mission);
+  const dirty = !sameMission(draft, base);
+  const movedElsewhere = state.mission.updatedAt !== base.updatedAt;
+
+  // The mission now arrives from the other device while you are looking at it.
+  // An untouched draft catches up silently; a half-written one is left alone
+  // and offered the reload below, because losing typed reasons to stay in sync
+  // is the wrong trade.
+  useEffect(() => {
+    if (!movedElsewhere) return;
+    // Our own save coming back with a fresh stamp, or the same edit made twice.
+    if (sameMission(state.mission, draft)) { setBase(state.mission); return; }
+    if (shouldReseed(dirty, state.mission.updatedAt, base.updatedAt)) {
+      setDraft(state.mission);
+      setBase(state.mission);
+    }
+  }, [state.mission, base, draft, dirty, movedElsewhere]);
+
+  const reload = () => { setDraft(state.mission); setBase(state.mission); };
 
   const setWhy = (id: string, patch: Partial<Why>) =>
     setDraft((d) => ({
@@ -87,11 +108,19 @@ export function MissionScreen() {
           </div>
         </Card>
 
+        {movedElsewhere && dirty && (
+          <p className="small warn">
+            Updated on another device.{' '}
+            <a href="#" onClick={(e) => { e.preventDefault(); reload(); }}>Reload draft?</a>{' '}
+            Saving instead will overwrite what came in.
+          </p>
+        )}
+
         <div className="row">
           <Button variant="primary" disabled={!dirty} onClick={() => setMission(draft)}>
             Save mission
           </Button>
-          <Button disabled={!dirty} onClick={() => setDraft(state.mission)}>Discard changes</Button>
+          <Button disabled={!dirty} onClick={reload}>Discard changes</Button>
           <span className="small muted" style={{ marginLeft: 'auto' }}>
             Last changed {new Date(state.mission.updatedAt).toLocaleDateString()}
           </span>

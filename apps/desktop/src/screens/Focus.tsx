@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   elapsedSeconds, formatDuration, growthAt, hashToSeed, MOOD_LINE, moodOf,
-  parseMediaUrl, pickWhy, remainingSeconds, sortMedia, stageOf, uid, type Media,
+  parseMediaUrl, pauseBudgetLeft, pickWhy, remainingSeconds, sortMedia, stageOf,
+  uid, type Media,
 } from '@mission/core';
 import { useStore } from '../store';
 import { Tree } from '../components/Tree';
@@ -18,7 +19,7 @@ const EPISODE_TICK_MS = 5000;
 const VISION_SECONDS = 7;
 
 export function Focus() {
-  const { active, state, updateDrift, finish } = useStore();
+  const { active, state, updateDrift, pause, resume, finish } = useStore();
   const [now, setNow] = useState(() => new Date());
   const [confirming, setConfirming] = useState(false);
   const [visionDismissed, setVisionDismissed] = useState(false);
@@ -28,6 +29,9 @@ export function Focus() {
   /** Read inside the away-timer, which must not close over a stale session. */
   const healthRef = useRef(1);
   healthRef.current = active?.health ?? 1;
+  /** Same reason: leaving during a pause is free, and must stay free. */
+  const pausedRef = useRef(false);
+  pausedRef.current = Boolean(active?.pausedAt);
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 500);
@@ -43,6 +47,9 @@ export function Focus() {
     const charge = () => {
       const ep = episode.current;
       if (!ep) return;
+      // You are allowed to walk away from a paused session. That is the point
+      // of pausing, and the price was taken out of the budget on resume.
+      if (pausedRef.current) return;
       const away = (Date.now() - ep.since) / 1000;
       updateDrift(ep.id, away, 'left-app');
       if (away > 20 && away < 20 + EPISODE_TICK_MS / 1000) {
@@ -77,6 +84,7 @@ export function Focus() {
   useEffect(() => {
     if (!active) return;
     return window.mission?.onIdleTick((idleSeconds) => {
+      if (pausedRef.current) return;
       if (idleSeconds > IDLE_LIMIT_SECONDS) {
         if (!idleEpisode.current) idleEpisode.current = uid('drift');
         updateDrift(idleEpisode.current, idleSeconds, 'idle');
@@ -156,6 +164,13 @@ export function Focus() {
           </div>
         )}
 
+        {active.pausedAt && (
+          <p className="small warn">
+            Paused. {formatDuration(pauseBudgetLeft(active, now))} of budget left —
+            past that it costs the tree, and twenty minutes ends it.
+          </p>
+        )}
+
         {active.drifts.length > 0 && (
           <p className="small warn">
             {active.drifts.length} lapse{active.drifts.length > 1 ? 's' : ''} · health{' '}
@@ -165,7 +180,12 @@ export function Focus() {
         )}
 
         {!confirming ? (
-          <Button onClick={() => setConfirming(true)} className="btn-danger">Give up</Button>
+          <div className="row">
+            <Button onClick={() => (active.pausedAt ? resume() : pause())}>
+              {active.pausedAt ? 'Resume' : 'Pause'}
+            </Button>
+            <Button onClick={() => setConfirming(true)} className="btn-danger">Give up</Button>
+          </div>
         ) : (
           <div className="row">
             <span className="small muted">Kill the tree at {Math.round(growth * 100)}%?</span>

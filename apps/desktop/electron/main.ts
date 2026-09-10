@@ -7,6 +7,7 @@ import fs from 'node:fs/promises';
 import crypto from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { leafPng } from './png';
+import type { TrayAction, TrayState } from './preload';
 
 const DIST = path.join(__dirname, '../dist');
 const DEV_URL = process.env.VITE_DEV_SERVER_URL;
@@ -32,6 +33,52 @@ let win: BrowserWindow | null = null;
 let tray: Tray | null = null;
 /** Mirrors the renderer's session state so the tray and idle watcher can react. */
 let sessionActive = false;
+/**
+ * The renderer owns the rules; main only draws them. Everything the tray menu
+ * offers is pushed here by the store and sent straight back when clicked, so
+ * there is exactly one place that knows what "start the next block" means.
+ */
+let trayState: TrayState = {};
+
+const showWindow = () => { win?.show(); win?.focus(); };
+
+const formatMinute = (minute: number) =>
+  `${String(Math.floor(minute / 60) % 24).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`;
+
+function sendTrayAction(action: TrayAction) {
+  showWindow();
+  win?.webContents.send('tray-action', action);
+}
+
+function buildTrayMenu() {
+  if (!tray) return;
+  const next = trayState.nextBlock;
+  const running = trayState.session === 'running';
+  const paused = trayState.session === 'paused';
+
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: 'Open', click: showWindow },
+      { type: 'separator' },
+      {
+        label: next
+          ? `Start next block: ${next.title} at ${formatMinute(next.startMinute)}`
+          : 'Nothing left today',
+        enabled: Boolean(next) && !running && !paused,
+        click: () => sendTrayAction('start-next'),
+      },
+      ...(running ? [{ label: 'Pause', click: () => sendTrayAction('pause') }] : []),
+      ...(paused ? [{ label: 'Resume', click: () => sendTrayAction('resume') }] : []),
+      {
+        label: 'Give up',
+        enabled: running || paused,
+        click: () => sendTrayAction('give-up'),
+      },
+      { type: 'separator' },
+      { label: 'Quit', click: () => { (app as any).isQuitting = true; app.quit(); } },
+    ]),
+  );
+}
 
 function createWindow() {
   win = new BrowserWindow({
@@ -80,13 +127,7 @@ function createTray() {
   tray = new Tray(nativeImage.createFromBuffer(leafPng(32)));
   tray.setToolTip('Mission Reminder');
   tray.on('click', () => (win?.isVisible() ? win.focus() : win?.show()));
-  tray.setContextMenu(
-    Menu.buildFromTemplate([
-      { label: 'Open', click: () => { win?.show(); win?.focus(); } },
-      { type: 'separator' },
-      { label: 'Quit', click: () => { (app as any).isQuitting = true; app.quit(); } },
-    ]),
-  );
+  buildTrayMenu();
 }
 
 app.whenReady().then(async () => {
@@ -119,20 +160,36 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
-ipcMain.handle('notify', (_e, payload: { title: string; body: string; urgent?: boolean }) => {
+ipcMain.handle('notify', (
+  _e, payload: { title: string; body: string; urgent?: boolean; screen?: string },
+) => {
   if (!Notification.isSupported()) return;
   const n = new Notification({
     title: payload.title,
     body: payload.body,
     urgency: payload.urgent ? 'critical' : 'normal',
   });
-  n.on('click', () => { win?.show(); win?.focus(); });
+  n.on('click', () => {
+    showWindow();
+    // A reminder about the week that dropped you on Today was half a reminder.
+    if (payload.screen) win?.webContents.send('open-screen', payload.screen);
+  });
   n.show();
 });
 
 ipcMain.handle('set-session-active', (_e, active: boolean) => {
   sessionActive = active;
   tray?.setToolTip(active ? 'Mission Reminder — session running' : 'Mission Reminder');
+});
+
+ipcMain.handle('set-tray-state', (_e, next: TrayState) => {
+  trayState = next ?? {};
+  tray?.setToolTip(
+    trayState.session === 'paused' ? 'Mission Reminder — paused'
+      : trayState.session === 'running' ? 'Mission Reminder — session running'
+        : 'Mission Reminder',
+  );
+  buildTrayMenu();
 });
 
 ipcMain.handle('flash', () => {
@@ -142,7 +199,7 @@ ipcMain.handle('flash', () => {
   setTimeout(() => win?.setAlwaysOnTop(false), 4000);
 });
 
-ipcMain.handle('show-window', () => { win?.show(); win?.focus(); });
+ipcMain.handle('show-window', () => showWindow());
 
 /**
  * Opens a file picker and takes a private copy of whatever was chosen, so the

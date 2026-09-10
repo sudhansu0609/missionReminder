@@ -3,7 +3,8 @@ import { Image, Pressable, Text, View } from 'react-native';
 import { useKeepAwake } from 'expo-keep-awake';
 import {
   elapsedSeconds, formatDuration, growthAt, hashToSeed, MOOD_LINE, moodOf,
-  parseMediaUrl, pickWhy, remainingSeconds, sortMedia, stageOf, type Media,
+  parseMediaUrl, pauseBudgetLeft, pickWhy, remainingSeconds, sortMedia, stageOf,
+  type Media,
 } from '@mission/core';
 import { useStore } from '../store';
 import { Tree } from '../components/Tree';
@@ -19,7 +20,7 @@ import { useTheme } from '../theme';
 export function Focus() {
   const { C, S } = useTheme();
   useKeepAwake();
-  const { active, state, finish } = useStore();
+  const { active, state, pause, resume, finish } = useStore();
   const [now, setNow] = useState(() => new Date());
   const [confirming, setConfirming] = useState(false);
   const [visionDismissed, setVisionDismissed] = useState(false);
@@ -97,6 +98,13 @@ export function Focus() {
 
       {whyEntry?.media && <MediaStrip media={[whyEntry.media]} />}
 
+      {active.pausedAt && (
+        <Text style={[S.small, { color: C.amber, textAlign: 'center' }]}>
+          Paused. {formatDuration(pauseBudgetLeft(active, now))} of budget left — past
+          that it costs the tree, and twenty minutes ends it.
+        </Text>
+      )}
+
       {active.drifts.length > 0 && (
         <Text style={[S.small, { color: C.amber }]}>
           {active.drifts.length} lapse{active.drifts.length > 1 ? 's' : ''} · health{' '}
@@ -109,9 +117,17 @@ export function Focus() {
 
       <View style={{ marginTop: 12, width: '100%', gap: 10 }}>
         {!confirming ? (
-          <Pressable style={S.btn} onPress={() => setConfirming(true)}>
-            <Text style={[S.btnText, { color: C.red }]}>Give up</Text>
-          </Pressable>
+          <>
+            <Pressable style={[S.btn, active.pausedAt ? S.btnPrimary : null]}
+                       onPress={() => (active.pausedAt ? resume() : pause())}>
+              <Text style={active.pausedAt ? S.btnTextPrimary : S.btnText}>
+                {active.pausedAt ? 'Resume' : 'Pause'}
+              </Text>
+            </Pressable>
+            <Pressable style={S.btn} onPress={() => setConfirming(true)}>
+              <Text style={[S.btnText, { color: C.red }]}>Give up</Text>
+            </Pressable>
+          </>
         ) : (
           <>
             <Text style={[S.small, { textAlign: 'center' }]}>

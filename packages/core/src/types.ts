@@ -129,6 +129,12 @@ export interface Session {
    * app cannot be a way of serving time you did not serve.
    */
   lostSeconds?: number;
+  /**
+   * Set while the session is deliberately paused. Growth is frozen at this
+   * moment, and the paused wall clock becomes lost time on resume -- a pause
+   * moves the finish line, it does not shorten the block.
+   */
+  pausedAt?: ISODate;
   species: number;
   /** Per-session randomness so two trees of one species still differ. */
   seed: number;

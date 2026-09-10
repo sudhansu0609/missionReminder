@@ -15,9 +15,16 @@ export interface Nudge {
   urgency: 'low' | 'normal' | 'high';
   /** The reason this matters, pulled from the mission. */
   why?: string;
+  /**
+   * Where the app should land when the notification is clicked. A reminder you
+   * cannot act on from the place it drops you is half a reminder.
+   */
+  screen?: NudgeScreen;
   goalId?: string;
   blockId?: string;
 }
+
+export type NudgeScreen = 'review' | 'today' | 'goals' | 'blocks';
 
 /** Rotates through your reasons so one never goes stale from repetition. */
 export function pickWhy(state: AppState, salt: string): string | undefined {
@@ -63,6 +70,7 @@ export function computeNudges(
       title: `${upcoming.block.title} in ${upcoming.minutesAway} min`,
       body: `Starts ${formatMinuteOfDay(upcoming.block.startMinute)}. Close what you are doing and plant the tree.`,
       why: pickWhy(state, upcoming.block.id + day),
+      screen: 'today',
       blockId: upcoming.block.id,
     });
   }
@@ -75,6 +83,7 @@ export function computeNudges(
       title: `You said ${formatMinuteOfDay(block.startMinute)} — ${block.title}`,
       body: 'The block is running without you. Start now and you still get most of the tree.',
       why: pickWhy(state, block.id + day + 'miss'),
+      screen: 'today',
       blockId: block.id,
     });
   }
@@ -87,6 +96,7 @@ export function computeNudges(
       title: 'Nothing planted today',
       body: 'A day with no tree in it. There is still time for one short block.',
       why: pickWhy(state, day),
+      screen: 'today',
     });
   }
 
@@ -100,6 +110,7 @@ export function computeNudges(
         title: `${goal.title} — untouched ${silence} days`,
         body: goal.rationale ?? 'This is one of your goals. It has gone quiet.',
         why: pickWhy(state, goal.id + day),
+        screen: 'goals',
         goalId: goal.id,
       });
     }
@@ -112,6 +123,7 @@ export function computeNudges(
         title: `${goal.title} is ${pace.pace === 'at-risk' ? 'at risk' : 'behind'}`,
         body: pace.message,
         why: pickWhy(state, goal.id + 'pace'),
+        screen: 'goals',
         goalId: goal.id,
       });
     }
@@ -124,6 +136,7 @@ export function computeNudges(
       kind: 'weekly-review',
       urgency: 'low',
       title: 'Week in review',
+      screen: 'review',
       body: 'Check your goals against where you said you would be, and set next week\u2019s blocks.',
     });
   }

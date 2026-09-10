@@ -42,6 +42,10 @@ ok('a state with sessions passes', validateState(withSession).ok);
 ok('lost time is filled in for an older backup',
    validateState(withSession).state.sessions[0].lostSeconds === 0);
 
+rejects('a pause marker that is not a time is refused', (s) => {
+  s.sessions = [{ id: 's', status: 'running', growth: 0.2, health: 1, startedAt: 'x', pausedAt: 7 }];
+});
+
 rejects('growth outside 0..1 is refused', (s) => {
   s.sessions = [{ id: 's', status: 'completed', growth: 4, health: 1, startedAt: 'x' }];
 });

@@ -67,6 +67,9 @@ export const sessionToRow = (s: Session, userId: string) => ({
   ended_at: s.endedAt ?? null, status: s.status, growth: s.growth, health: s.health,
   drifts: s.drifts, species: s.species, seed: s.seed, note: s.note ?? null,
   lost_seconds: Math.round(s.lostSeconds ?? 0),
+  // Null unless the session is paused right now, so the other device sees the
+  // stopped clock rather than a tree that appears to have frozen for no reason.
+  paused_at: s.pausedAt ?? null,
   updated_at: new Date().toISOString(),
 });
 
@@ -77,4 +80,5 @@ export const rowToSession = (r: any): Session => ({
   health: Number(r.health), drifts: r.drifts ?? [], species: r.species,
   seed: r.seed, note: r.note ?? undefined,
   lostSeconds: Number(r.lost_seconds ?? 0),
+  pausedAt: r.paused_at ?? undefined,
 });

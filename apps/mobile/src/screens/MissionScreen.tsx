@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-import { uid, type Media, type Mission } from '@mission/core';
+import { sameMission, shouldReseed, uid, type Media, type Mission } from '@mission/core';
 import { useStore } from '../store';
 import { MediaStrip } from '../components/MediaStrip';
 import { useTheme } from '../theme';
@@ -9,7 +9,23 @@ export function MissionScreen() {
   const { C, S } = useTheme();
   const { state, setMission } = useStore();
   const [draft, setDraft] = useState<Mission>(state.mission);
-  const dirty = JSON.stringify(draft) !== JSON.stringify(state.mission);
+  /** The mission the draft was seeded from -- not necessarily the current one. */
+  const [base, setBase] = useState<Mission>(state.mission);
+  const dirty = !sameMission(draft, base);
+  const movedElsewhere = state.mission.updatedAt !== base.updatedAt;
+
+  // The mission arrives from the desktop while you are looking at it. An
+  // untouched draft catches up silently; a half-written one is left alone and
+  // offered the reload below.
+  useEffect(() => {
+    if (!movedElsewhere) return;
+    // Our own save coming back with a fresh stamp, or the same edit made twice.
+    if (sameMission(state.mission, draft)) { setBase(state.mission); return; }
+    if (shouldReseed(dirty, state.mission.updatedAt, base.updatedAt)) {
+      setDraft(state.mission);
+      setBase(state.mission);
+    }
+  }, [state.mission, base, draft, dirty, movedElsewhere]);
 
   return (
     <ScrollView style={S.screen} contentContainerStyle={S.content}>
@@ -79,6 +95,18 @@ export function MissionScreen() {
           </View>
         ))}
       </View>
+
+      {movedElsewhere && dirty && (
+        <View style={[S.card, { borderLeftWidth: 3, borderLeftColor: C.amber }]}>
+          <Text style={S.small}>
+            Updated on another device. Saving will overwrite what came in.
+          </Text>
+          <Pressable style={S.btn}
+                     onPress={() => { setDraft(state.mission); setBase(state.mission); }}>
+            <Text style={S.btnText}>Reload draft</Text>
+          </Pressable>
+        </View>
+      )}
 
       <Pressable style={[S.btn, dirty && S.btnPrimary, { opacity: dirty ? 1 : 0.45 }]}
                  disabled={!dirty} onPress={() => setMission(draft)}>

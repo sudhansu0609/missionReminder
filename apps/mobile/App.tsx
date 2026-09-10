@@ -3,10 +3,14 @@ import { Pressable, SafeAreaView, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { StoreProvider, useStore } from './src/store';
 import { ThemeProvider, useTheme } from './src/theme';
-import { notifyNow, requestPermission, rescheduleAll } from './src/notifications';
+import {
+  notifyNow, onNotificationTap, requestPermission, rescheduleAll,
+} from './src/notifications';
 import { Today } from './src/screens/Today';
 import { Goals } from './src/screens/Goals';
+import { Blocks } from './src/screens/Blocks';
 import { Forest } from './src/screens/Forest';
+import { Review } from './src/screens/Review';
 import { MissionScreen } from './src/screens/MissionScreen';
 import { Settings } from './src/screens/Settings';
 import { Focus } from './src/screens/Focus';
@@ -16,6 +20,7 @@ const TABS = [
   { id: 'today', label: 'Today' },
   { id: 'mission', label: 'Mission' },
   { id: 'goals', label: 'Goals' },
+  { id: 'blocks', label: 'Blocks' },
   { id: 'forest', label: 'Forest' },
   { id: 'settings', label: 'You' },
 ] as const;
@@ -50,8 +55,18 @@ function Shell() {
   const { C, S, theme } = useTheme();
   const { ready, active, ended, state } = useStore();
   const [tab, setTab] = useState<string>('today');
+  // The review is not a seventh tab -- it is a thing you open once a week --
+  // so it sits over the top of whichever tab you were on.
+  const [reviewing, setReviewing] = useState(false);
 
   useEffect(() => { void requestPermission(); }, []);
+
+  // A tapped reminder lands where it was about, rather than on whatever tab
+  // the app happened to be showing.
+  useEffect(() => onNotificationTap((screen) => {
+    if (screen === 'review') setReviewing(true);
+    else { setReviewing(false); setTab(screen); }
+  }), []);
 
   // The whole reminder schedule is rebuilt whenever the blocks, the mission or
   // today's sessions change -- that is what keeps the wording current and stops
@@ -89,14 +104,24 @@ function Shell() {
     );
   }
 
+  if (reviewing) {
+    return (
+      <SafeAreaView style={S.screen}>
+        <StatusBar style={theme.mode === 'dark' ? 'light' : 'dark'} />
+        <Review onClose={() => setReviewing(false)} />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={S.screen}>
       <StatusBar style={theme.mode === 'dark' ? 'light' : 'dark'} />
       <View style={{ flex: 1 }}>
-        {tab === 'today' && <Today />}
+        {tab === 'today' && <Today onReview={() => setReviewing(true)} />}
         {tab === 'mission' && <MissionScreen />}
         {tab === 'goals' && <Goals />}
-        {tab === 'forest' && <Forest />}
+        {tab === 'blocks' && <Blocks />}
+        {tab === 'forest' && <Forest onReview={() => setReviewing(true)} />}
         {tab === 'settings' && <Settings />}
       </View>
 

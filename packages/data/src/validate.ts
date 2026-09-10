@@ -61,6 +61,9 @@ export function validateState(input: unknown): Validation {
     if (!inRange(s.growth, 0, 1)) return fail('A session has growth outside 0 to 1.');
     if (!inRange(s.health, 0, 1)) return fail('A session has health outside 0 to 1.');
     if (typeof s.startedAt !== 'string') return fail('A session has no start time.');
+    if (s.pausedAt !== undefined && s.pausedAt !== null && typeof s.pausedAt !== 'string') {
+      return fail('A session has a pause marker that is not a time.');
+    }
   }
 
   // Unknown extra fields are kept: a backup from a newer build should not lose

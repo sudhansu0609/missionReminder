@@ -14,9 +14,17 @@
     "desktop": "npm run build:core && npm run dev -w @mission/desktop",
     "mobile": "npm run build:core && npm start -w @mission/mobile",
     "typecheck": "tsc -b packages/core packages/data && npm run typecheck -w @mission/desktop -w @mission/mobile",
+    "lint": "eslint packages/core/src packages/data/src apps/desktop/src apps/desktop/electron apps/mobile/src apps/mobile/App.tsx scripts",
     "test": "npm run build:core && npm test -w @mission/core && npm test -w @mission/data && node scripts/make-icons.test.mjs"
   },
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.10.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.12.0",
+    "typescript-eslint": "^8.70.0"
   }
 }

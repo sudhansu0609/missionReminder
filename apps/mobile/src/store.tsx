@@ -2,8 +2,8 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { AppState as RNAppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
-  endSession, hashToSeed, nowISO, reconcileSession, seedState, startSession, tick, uid,
-  updateDrift as chargeDrift,
+  endSession, hashToSeed, nowISO, pauseSession, reconcileSession, resumeSession,
+  seedState, startSession, tick, uid, updateDrift as chargeDrift,
   type AppState, type Block, type Drift, type Goal, type Mission, type Session, type Settings,
 } from '@mission/core';
 import {
@@ -37,8 +37,13 @@ interface Store {
   saveGoal(g: Goal): void;
   toggleMilestone(goalId: string, milestoneId: string): void;
   saveBlock(b: Block): void;
+  removeBlock(id: string): void;
   begin(input: { title: string; minutes: number; goalId?: string; blockId?: string }): void;
   updateDrift(driftId: string, totalSeconds: number, reason: Drift['reason']): void;
+  /** Stops the clock. Growth freezes; leaving during a pause costs nothing. */
+  pause(): void;
+  /** Starts it again, and charges the stop -- see `resumeSession` in core. */
+  resume(): void;
   finish(status: 'completed' | 'abandoned'): void;
   setNote(sessionId: string, note: string): void;
   dismissEnded(): void;
@@ -92,14 +97,16 @@ export function StoreProvider({
    * the heartbeat is the fallback for the case where it was killed outright.
    * Both charge the *same* episode, so one absence stays one lapse.
    */
-  const resume = useCallback(async (awaySeconds: number) => {
+  const cameBack = useCallback(async (awaySeconds: number) => {
     const running = stateRef.current.sessions.find((s) => s.status === 'running');
     if (!running) return;
     const beat = await readHeartbeat(AsyncStorage);
     const lastSeen = beat?.sessionId === running.id ? beat.at : null;
     const episode = uid('drift');
     const now = new Date();
-    const charged = awaySeconds > 0
+    // Leaving during a pause is the point of a pause. `reconcileSession` still
+    // runs: it is what settles the paused stretch against the budget.
+    const charged = awaySeconds > 0 && !running.pausedAt
       ? chargeDrift(running, episode, awaySeconds, 'left-app', now)
       : running;
     // No heartbeat of ours means this phone was never watching it: it is the
@@ -181,12 +188,12 @@ export function StoreProvider({
       } else if (next === 'active') {
         const away = leftAt ? (Date.now() - leftAt) / 1000 : 0;
         leftAt = null;
-        void resume(away);
+        void cameBack(away);
         void repoRef.current.flush?.();   // back in the foreground, back online
       }
     });
     return () => sub.remove();
-  }, [active?.id, resume]);
+  }, [active?.id, cameBack]);
 
   // One ticker drives the timer, the tree, the heartbeat and auto-completion.
   useEffect(() => {
@@ -201,6 +208,9 @@ export function StoreProvider({
         void writeHeartbeat(AsyncStorage, current.id);
       }
       const next = tick(current);
+      // Unchanged means paused: the clock is stopped, so there is nothing to
+      // repaint and nothing to write. The heartbeat above still goes out.
+      if (next === current) return;
       if (next.status === 'completed') {
         commitSession(next);
         eventRef.current?.('completed', next);
@@ -277,6 +287,11 @@ export function StoreProvider({
     void repoRef.current.upsertBlock(block);
   }, [put]);
 
+  const removeBlock = useCallback((id: string) => {
+    put((s) => ({ ...s, blocks: s.blocks.filter((b) => b.id !== id) }));
+    void repoRef.current.deleteBlock(id);
+  }, [put]);
+
   const begin = useCallback((input: {
     title: string; minutes: number; goalId?: string; blockId?: string;
   }) => {
@@ -299,8 +314,24 @@ export function StoreProvider({
   ) => {
     const current = stateRef.current.sessions.find((s) => s.status === 'running');
     if (!current) return;
+    // Nothing is charged while the clock is stopped; the pause pays on resume.
+    if (current.pausedAt) return;
     const next = chargeDrift(current, driftId, totalSeconds, reason);
     if (next === current) return;
+    commitSession(next);
+    if (next.status === 'abandoned') eventRef.current?.('died', next);
+  }, [commitSession]);
+
+  const pause = useCallback(() => {
+    const current = stateRef.current.sessions.find((s) => s.status === 'running');
+    if (!current || current.pausedAt) return;
+    commitSession(pauseSession(current));
+  }, [commitSession]);
+
+  const resume = useCallback(() => {
+    const current = stateRef.current.sessions.find((s) => s.status === 'running');
+    if (!current?.pausedAt) return;
+    const next = resumeSession(current);
     commitSession(next);
     if (next.status === 'abandoned') eventRef.current?.('died', next);
   }, [commitSession]);
@@ -323,13 +354,13 @@ export function StoreProvider({
 
   const store = useMemo<Store>(() => ({
     state, ready, mode, email, active, ended,
-    setMission, setSettings, ingestMedia, saveGoal, toggleMilestone, saveBlock,
-    begin, updateDrift, finish, setNote, dismissEnded,
+    setMission, setSettings, ingestMedia, saveGoal, toggleMilestone, saveBlock, removeBlock,
+    begin, updateDrift, pause, resume, finish, setNote, dismissEnded,
     refreshAuth: wire,
   }), [
     state, ready, mode, email, active, ended,
-    setMission, setSettings, ingestMedia, saveGoal, toggleMilestone, saveBlock,
-    begin, updateDrift, finish, setNote, dismissEnded, wire,
+    setMission, setSettings, ingestMedia, saveGoal, toggleMilestone, saveBlock, removeBlock,
+    begin, updateDrift, pause, resume, finish, setNote, dismissEnded, wire,
   ]);
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;

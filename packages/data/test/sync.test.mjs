@@ -91,6 +91,21 @@ const goal = (id, title) => ({
      client.tables.sessions.find((s) => s.id === 's1')?.status === 'completed');
   ok('lost time round-trips through the row mapper',
      client.tables.sessions.find((s) => s.id === 's1')?.lost_seconds === 0);
+
+  // A pause has to cross devices, or the phone shows a tree that stopped
+  // growing for no visible reason.
+  await a.repo.upsertSession({
+    id: 's2', title: 'Deep work', plannedMinutes: 50, startedAt: '2026-09-07T09:00:00.000Z',
+    status: 'running', growth: 0.2, health: 1, drifts: [], species: 1, seed: 1,
+    lostSeconds: 0, pausedAt: '2026-09-07T09:10:00.000Z',
+  });
+  const back = await a.repo.load();
+  ok('a paused session carries its stopped clock to the server',
+     client.tables.sessions.find((s) => s.id === 's2')?.paused_at === '2026-09-07T09:10:00.000Z');
+  ok('and reads back as paused',
+     back.sessions.find((s) => s.id === 's2')?.pausedAt === '2026-09-07T09:10:00.000Z');
+  ok('while an unpaused one reads back with no marker',
+     back.sessions.find((s) => s.id === 's1')?.pausedAt === undefined);
 }
 
 // --- a delete on one device is not resurrected by the other --------------

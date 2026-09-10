@@ -1,7 +1,8 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  endSession, getTheme, hashToSeed, nowISO, reconcileSession, seedState, startSession,
-  tick, uid, updateDrift as chargeDrift,
+  blockToStartNow, endSession, getTheme, hashToSeed, nowISO, pauseSession,
+  reconcileSession, resumeSession, seedState, startSession, tick, uid,
+  updateDrift as chargeDrift,
   type AppState, type Block, type Drift, type Goal, type Mission, type Session,
   type Settings, type Theme,
 } from '@mission/core';
@@ -49,6 +50,10 @@ interface Store {
    * your return -- and a long enough absence kills it before you get back.
    */
   updateDrift(driftId: string, totalSeconds: number, reason: Drift['reason']): void;
+  /** Stops the clock. Growth freezes; leaving during a pause costs nothing. */
+  pause(): void;
+  /** Starts it again, and charges the stop -- see `resumeSession` in core. */
+  resume(): void;
   finish(status: 'completed' | 'abandoned'): void;
   setNote(sessionId: string, note: string): void;
   dismissEnded(): void;
@@ -194,6 +199,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         void writeHeartbeat(window.localStorage, current.id);
       }
       const next = tick(current);
+      // Unchanged means paused: the clock is stopped, so there is nothing to
+      // repaint and nothing to write. The heartbeat above still goes out.
+      if (next === current) return;
       if (next.status === 'completed') {
         commitSession(next);
         window.mission?.notify('Tree is rooted', `${next.title} — done. That one counts.`);
@@ -301,12 +309,33 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   ) => {
     const current = stateRef.current.sessions.find((s) => s.status === 'running');
     if (!current) return;
+    // Walking away during a pause is the entire point of a pause. Nothing is
+    // charged until the clock starts again.
+    if (current.pausedAt) return;
     const next = chargeDrift(current, driftId, totalSeconds, reason);
     if (next === current) return;
     commitSession(next);
     if (next.status === 'abandoned') {
       window.mission?.notify('The tree died',
                              'Too much time away. Start another when you are ready.', true);
+    }
+  }, [commitSession]);
+
+  const pause = useCallback(() => {
+    const current = stateRef.current.sessions.find((s) => s.status === 'running');
+    if (!current || current.pausedAt) return;
+    commitSession(pauseSession(current));
+  }, [commitSession]);
+
+  const resume = useCallback(() => {
+    const current = stateRef.current.sessions.find((s) => s.status === 'running');
+    if (!current?.pausedAt) return;
+    const next = resumeSession(current);
+    commitSession(next);
+    if (next.status === 'abandoned') {
+      window.mission?.notify('The tree died',
+                             'That was longer than a pause. Start another when you are ready.',
+                             true);
     }
   }, [commitSession]);
 
@@ -331,17 +360,32 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     put(() => next);
   }, [put]);
 
+  // Everything the tray menu offers, pushed to main whenever it changes. The
+  // menu is only a view of this: main never works out what the next block is.
+  const trayNext = useMemo(
+    () => blockToStartNow(state.blocks, state.sessions, new Date()),
+    [state.blocks, state.sessions],
+  );
+  useEffect(() => {
+    window.mission?.setTrayState({
+      nextBlock: trayNext
+        ? { title: trayNext.title, startMinute: trayNext.startMinute }
+        : undefined,
+      session: active ? (active.pausedAt ? 'paused' : 'running') : null,
+    });
+  }, [trayNext?.id, trayNext?.title, trayNext?.startMinute, active?.id, active?.pausedAt]);
+
   const store = useMemo<Store>(() => ({
     state, ready, mode, email, active, theme, userId, ended,
     setMission, setSettings, ingestMedia,
     saveGoal, removeGoal, toggleMilestone, saveBlock, removeBlock,
-    begin, updateDrift, finish, setNote, dismissEnded, importState,
+    begin, updateDrift, pause, resume, finish, setNote, dismissEnded, importState,
     refreshAuth: wire,
   }), [
     state, ready, mode, email, active, theme, userId, ended,
     setMission, setSettings, ingestMedia,
     saveGoal, removeGoal, toggleMilestone, saveBlock, removeBlock,
-    begin, updateDrift, finish, setNote, dismissEnded, importState, wire,
+    begin, updateDrift, pause, resume, finish, setNote, dismissEnded, importState, wire,
   ]);
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;

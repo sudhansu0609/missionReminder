@@ -29,10 +29,15 @@ behind.
 
 ```bash
 npm install
-npm test            # 136 behaviour checks over the rules and the storage, no framework
+npm test            # 217 behaviour checks over the rules and the storage, no framework
+npm run typecheck   # both apps and both packages
+npm run lint        # eslint, flat config, no stylistic rules
 npm run desktop     # builds the shared packages, then opens the Electron app
 npm run mobile      # starts Expo; scan the QR code with your iPhone
 ```
+
+The same four commands run on every push through
+`.github/workflows/ci.yml`, on Node 20.
 
 Or skip remembering any of that. `start.ps1` (Windows), `start.sh` (macOS and
 Linux) and `start.cmd` (double-clickable) check Node, install what is missing,
@@ -113,6 +118,16 @@ lapse, and if the block's window ran out while nobody was looking, the session
 is withered rather than completed. A laptop that sleeps at minute 45 of 50
 loses that block. That is the price of the loophole being closed.
 
+**Pause is honest, not free.** Stop the clock and growth freezes exactly where
+it was; the paused seconds are added to what you owe, so the finish line moves
+rather than the block getting shorter. Five minutes of pause per session cost
+nothing — the app is not trying to stop you answering the door. Past that, the
+excess is charged like any other absence and can kill the tree, and a single
+pause longer than twenty minutes is not a pause: the session ends withered at
+the growth it had when you stopped. While it is paused you can leave, close
+the app, walk off; none of it is charged. That is the whole point of the
+button.
+
 The first 60% of a block grows wood; the last 40% fills the canopy. That is
 deliberate. The stretch you are most likely to bail on is the stretch that
 visibly pays.
@@ -125,6 +140,7 @@ What counts as drifting away:
 | walked off | machine idle > 150s | screen kept awake, so backgrounding covers it |
 | closed the app | lost time, charged as one lapse on the next launch | same |
 | quit early | −35% health, growth kept | same |
+| paused | free, up to 5 min a session | same |
 
 A withered tree still goes in the forest. A record with no gaps in it would be a
 worse mirror.
@@ -201,7 +217,41 @@ numb from repetition. A running session silences all of them.
 The desktop checks every minute and fires system notifications, flashing the
 taskbar for urgent ones. The phone hands iOS a real schedule in advance, so
 block reminders fire whether or not the app is open. Nudge ids are stable per
-day, so each one fires exactly once.
+day, so each one fires exactly once. Every reminder knows which screen it is
+about, so clicking one lands you there rather than on whatever was last open.
+
+## The week in review
+
+The Sunday nudge now opens something. **Review** is a tab on the desktop and a
+card on Today (Sundays) or a button on Forest on the phone, with a *this week /
+last week* toggle. It shows how many of the week's blocks you kept against how
+many you planned, every tree you grew alive or withered, which goals the hours
+actually went into, the streak, and the blocks waiting for you next week.
+
+A block counts as *planned* once the day has arrived — a Thursday block is not
+missed on Wednesday — and as *kept* when a session started inside its window
+(five minutes early through to the end of the grace period plus the block) and
+finished. The week runs local Monday to Sunday, and a session belongs to the
+week it ended in.
+
+## Keyboard, and the tray
+
+On the desktop:
+
+| Keys | Action |
+|---|---|
+| `Ctrl/Cmd+1` … `Ctrl/Cmd+7` | Today, Mission, Goals, Blocks, Forest, Review, Settings |
+| `Ctrl/Cmd+Enter` | Start the next block today |
+| `Ctrl/Cmd+P` | Pause or resume the running session |
+| `Ctrl/Cmd+Shift+G` | Give up the running session |
+| `Escape` | Close the session-end screen |
+
+All of them are ignored while the caret is in a text box, Escape included.
+Settings lists them too.
+
+The tray menu carries the same three things without opening the window: the
+next block by name and time, Pause or Resume while a session runs, and Give up
+— which still asks, in the window, before it kills anything.
 
 ## How "how far am I" is measured
 
@@ -218,9 +268,6 @@ against it, so you can see effort and completion diverge.
 
 ## Known limits
 
-- **Block editing is desktop-only.** The phone can start, pause and tick things
-  off; setting up a recurring schedule is fiddly on a small screen and you only
-  do it occasionally. The mobile Today screen says so.
 - **Sync is last-write-wins per row.** Right for one person on two devices. If
   you edit the same goal on both while offline, the later write wins and the
   other is lost. Tombstones are never purged; at this scale that costs nothing.
@@ -238,8 +285,16 @@ against it, so you can see effort and completion diverge.
 
 ## Verified
 
-`npm test` — 136 checks, all passing:
+`npm test` — 217 checks, all passing:
 
+- pause: growth frozen while stopped, the paused seconds owed back as lost
+  time, one budget shared across a session, the excess charged like any other
+  absence, a twenty-minute pause ending the session at the frozen growth, and
+  a paused session the app was quit on keeping that growth
+- the weekly review: Monday-to-Sunday boundaries, last week, kept against
+  planned on a Mon-Fri fixture, minutes per goal, and the Sunday/Monday seam
+- the keyboard map: the modifier per platform, nothing firing while typing,
+  and which block "start next" means
 - deterministic tree geometry, progressive reveal, canopy timing
 - drift penalties and death, partial growth on quitting
 - progressive drift: one absence stays one lapse and is charged only once
@@ -258,5 +313,5 @@ against it, so you can see effort and completion diverge.
 - every theme: unique ids, complete palettes, a distinct canopy, a brown death
   colour, legal hsl ranges, and bark that stays visible on the light ones
 
-Both apps typecheck clean. The desktop app builds and launches. The iOS bundle
-builds through Metro (888 modules) with the shared packages resolving correctly.
+Both apps typecheck clean and `npm run lint` is silent. The desktop app builds.
+The same four gates run in GitHub Actions on every push.

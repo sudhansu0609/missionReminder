@@ -1,12 +1,12 @@
 import React, { useMemo } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { dayKey, forestSummary, speciesTraits, type Session } from '@mission/core';
 import { useStore } from '../store';
 import { Tree } from '../components/Tree';
 import { useTheme } from '../theme';
 
-export function Forest() {
-  const { C, S } = useTheme();
+export function Forest({ onReview }: { onReview: () => void }) {
+  const { S } = useTheme();
   const { state } = useStore();
   const summary = forestSummary(state.sessions);
 
@@ -26,6 +26,10 @@ export function Forest() {
         {summary.alive} standing · {summary.withered} withered · {summary.hours} hours ·{' '}
         {summary.streak} day streak
       </Text>
+
+      <Pressable style={S.btn} onPress={onReview}>
+        <Text style={S.btnText}>Week in review</Text>
+      </Pressable>
 
       {byDay.length === 0 && (
         <View style={S.card}>

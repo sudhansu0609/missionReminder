@@ -4,6 +4,7 @@ import {
   minutesOnDay, missedBlocksToday, nextBlockToday, wasHonouredToday,
 } from '@mission/core';
 import { useStore } from '../store';
+import { useMinute } from '../hooks';
 import { Button, Card, Field } from '../components/ui';
 import { MediaBoard } from '../components/MediaBoard';
 
@@ -11,7 +12,10 @@ const DURATIONS = [15, 25, 50, 90];
 
 export function Today({ go }: { go: (tab: string) => void }) {
   const { state, begin } = useStore();
-  const now = new Date();
+  // The timeline reads the clock, so it has to notice the clock moving. One
+  // shared minute ticker drives this, the nav badge and the reminder loop.
+  const minute = useMinute();
+  const now = useMemo(() => new Date(), [minute]);
   const [minutes, setMinutes] = useState(50);
   const [goalId, setGoalId] = useState(state.goals[0]?.id ?? '');
   const [title, setTitle] = useState('');
@@ -19,7 +23,7 @@ export function Today({ go }: { go: (tab: string) => void }) {
   const blocks = blocksForDay(state.blocks, now);
   const missed = missedBlocksToday(state.blocks, state.sessions, now);
   const upcoming = nextBlockToday(state.blocks, now);
-  const nudges = useMemo(() => computeNudges(state, now).slice(0, 3), [state]);
+  const nudges = useMemo(() => computeNudges(state, now).slice(0, 3), [state, now]);
   const summary = forestSummary(state.sessions);
   const todayMinutes = Math.round(minutesOnDay(state.sessions));
   const nowMinute = minuteOfDay(now);

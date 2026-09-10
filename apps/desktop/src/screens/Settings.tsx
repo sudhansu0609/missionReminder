@@ -1,8 +1,11 @@
 import React, { useRef, useState } from 'react';
-import { canopyColor, THEMES } from '@mission/core';
+import { canopyColor, SHORTCUT_HELP, THEMES } from '@mission/core';
 import { validateState } from '@mission/data';
 import { supabase, supabaseConfigured, useStore } from '../store';
 import { Button, Card, Field } from '../components/ui';
+
+/** What `Mod` means on this machine, so the list is not a riddle. */
+const MOD = navigator.userAgent.includes('Mac') ? 'Cmd' : 'Ctrl';
 
 /**
  * Sync is opt-in. With no Supabase keys the app is a perfectly good local one;
@@ -106,6 +109,21 @@ export function Settings() {
               <span className="muted small"> — click to skip it</span>
             </span>
           </label>
+        </Card>
+
+        <Card>
+          <h2>Shortcuts</h2>
+          <p className="small muted" style={{ margin: '8px 0 12px' }}>
+            Ignored while you are typing in a box. {MOD} is the modifier on this machine.
+          </p>
+          <div className="stack" style={{ gap: 6 }}>
+            {SHORTCUT_HELP.map((row) => (
+              <div key={row.keys} className="row-between">
+                <span className="pill">{row.keys.replace(/Mod/g, MOD)}</span>
+                <span className="small muted">{row.action}</span>
+              </div>
+            ))}
+          </div>
         </Card>
 
         <Card>

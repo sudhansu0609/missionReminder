@@ -5,23 +5,29 @@ import {
   missedBlocksToday, wasHonouredToday,
 } from '@mission/core';
 import { useStore } from '../store';
+import { useMinute } from '../hooks';
 import { MediaStrip } from '../components/MediaStrip';
 import { useTheme } from '../theme';
 
 const DURATIONS = [15, 25, 50, 90];
 
-export function Today() {
+export function Today({ onReview }: { onReview: () => void }) {
   const { C, S } = useTheme();
   const { state, begin } = useStore();
-  const now = new Date();
+  // The timeline reads the clock, so it has to notice the clock moving. One
+  // shared minute ticker for the whole app.
+  const minute = useMinute();
+  const now = useMemo(() => new Date(), [minute]);
   const [minutes, setMinutes] = useState(50);
   const [goalId, setGoalId] = useState<string | undefined>(state.goals[0]?.id);
   const [title, setTitle] = useState('');
 
   const blocks = blocksForDay(state.blocks, now);
   const missed = missedBlocksToday(state.blocks, state.sessions, now);
-  const nudges = useMemo(() => computeNudges(state, now).slice(0, 3), [state]);
+  const nudges = useMemo(() => computeNudges(state, now).slice(0, 3), [state, now]);
   const summary = forestSummary(state.sessions);
+  // Sunday is when the look-back is worth offering unprompted.
+  const isSunday = now.getDay() === 0;
 
   return (
     <ScrollView style={S.screen} contentContainerStyle={S.content}>
@@ -30,6 +36,16 @@ export function Today() {
         {summary.streak} day streak · {Math.round(minutesOnDay(state.sessions))} min today ·{' '}
         {summary.alive} trees standing
       </Text>
+
+      {isSunday && (
+        <Pressable style={[S.card, { borderLeftWidth: 3, borderLeftColor: C.accent }]}
+                   onPress={onReview}>
+          <Text style={S.h2}>Week in review</Text>
+          <Text style={S.small}>
+            What you planned, what you kept, and where the hours went. Tap to look back.
+          </Text>
+        </Pressable>
+      )}
 
       <View style={S.card}>
         <View style={S.missionBar}>
@@ -100,7 +116,7 @@ export function Today() {
         <Text style={S.h2}>Your blocks today</Text>
         {blocks.length === 0 && (
           <Text style={S.small}>
-            Nothing scheduled today. Blocks are set up on the desktop app.
+            Nothing scheduled today. A commitment you keep beats one you set well.
           </Text>
         )}
         {blocks.map((b) => {

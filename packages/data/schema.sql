@@ -68,6 +68,8 @@ create table if not exists public.sessions (
   note            text,
   -- Wall-clock seconds inside the block that the app was not there to witness.
   lost_seconds    integer not null default 0,
+  -- Set while the session is paused, so the stopped clock crosses devices.
+  paused_at       timestamptz,
   updated_at      timestamptz not null default now()
 );
 
@@ -99,6 +101,7 @@ alter table public.goals    add column if not exists media    jsonb not null def
 alter table public.goals    add column if not exists deleted_at   timestamptz;
 alter table public.blocks   add column if not exists deleted_at   timestamptz;
 alter table public.sessions add column if not exists lost_seconds integer not null default 0;
+alter table public.sessions add column if not exists paused_at    timestamptz;
 
 -- Photo storage for the vision board. Public read with random per-user paths so
 -- images can be drawn straight from a URL; writes are owner-only.

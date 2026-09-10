@@ -8,7 +8,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "watch": "tsc -p tsconfig.json --watch",
-    "test": "node test/rules.test.mjs && node test/media-themes.test.mjs"
+    "test": "node test/rules.test.mjs && node test/pause.test.mjs && node test/review.test.mjs && node test/shortcuts.test.mjs && node test/media-themes.test.mjs"
   },
   "devDependencies": {
     "typescript": "^5.6.3"

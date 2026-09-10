@@ -38,6 +38,14 @@ export function Focus() {
     return () => window.clearInterval(id);
   }, []);
 
+  // Resumed from the tray with the window blurred, the episode that began
+  // during the pause would otherwise be charged from the moment you left. The
+  // clock starts here, so the absence does too.
+  useEffect(() => {
+    if (active?.pausedAt || !episode.current) return;
+    episode.current = { id: uid('drift'), since: Date.now(), escalated: false };
+  }, [active?.pausedAt]);
+
   // Away from the window is away from the work, and the cost is charged while
   // you are gone rather than waiting politely for you to come back -- so a long
   // enough absence kills the tree before you return to see it.

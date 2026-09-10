@@ -570,3 +570,8 @@ packages/data/src/validate.ts
 packages/data/test/sync.test.mjs
 packages/data/test/validate.test.mjs
 ```
+
+---
+
+*Reviewed 2026-09-10. Four defects found and fixed after this report was
+written; see `PHASE2_REVIEW.md`. The check count is now 219.*

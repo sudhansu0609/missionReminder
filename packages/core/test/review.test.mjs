@@ -79,6 +79,13 @@ ok('missed is the rest', week.blocks.missed === 3, String(week.blocks.missed));
 ok('a block later in the week is not missed yet',
    weekReview({ ...state, blocks: [block({ days: [5] })] },
               new Date('2026-09-09T12:00:00')).blocks.planned === 0);
+// Wednesday 08:00: Monday and Tuesday are planned, today's 09:00 block is not
+// yet. At 09:11 its grace has passed and it is.
+ok('a block later today is not planned yet',
+   weekReview(state, new Date('2026-09-09T08:00:00')).blocks.planned === 2 &&
+   weekReview(state, new Date('2026-09-09T09:11:00')).blocks.planned === 3,
+   `${weekReview(state, new Date('2026-09-09T08:00:00')).blocks.planned} then ${
+     weekReview(state, new Date('2026-09-09T09:11:00')).blocks.planned}`);
 
 // --- minutes by goal -------------------------------------------------------
 const byGoal = week.minutesByGoal;

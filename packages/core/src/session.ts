@@ -187,8 +187,7 @@ export function resumeSession(session: Session, now: Date = new Date()): Session
   if (paused > MAX_PAUSE_SECONDS) {
     // `pausedAt` is still set here on purpose: it is what makes `endSession`
     // read the frozen growth rather than the wall clock it never served.
-    const ended = endSession({ ...session, drifts }, 'abandoned', now);
-    return { ...ended, pausedAt: undefined };
+    return endSession({ ...session, drifts }, 'abandoned', now);
   }
 
   // Only the part of the pause past the budget costs health, and the budget is
@@ -219,14 +218,14 @@ export function resumeSession(session: Session, now: Date = new Date()): Session
  * nobody was looking, the session is abandoned at the growth it had reached.
  * Strict on purpose -- the alternative is that closing the app completes it.
  *
- * A paused session is two stretches, not one. Heartbeats keep being written
- * while paused, so everything up to `lastSeen` was a pause the app watched:
- * it is settled under the ordinary pause rules, budget and cap included, and
- * a pause that ran past `MAX_PAUSE_SECONDS` ends the session here just as it
- * would on a resume. Only what came *after* the last heartbeat is unwatched,
- * and that is charged as a lapse like any other gap. The session stays paused
- * across the correction, with the marker moved to `now` so the frozen growth
- * stays frozen rather than shrinking by the time the app was away.
+ * A paused session is left alone. The gap rule exists so that time the app
+ * did not see cannot become growth, and a stopped clock cannot grow whether
+ * the app is watching it or not -- so there is nothing for a heartbeat to
+ * prove. Quit the app, lock the phone, walk off: it is all one pause, and the
+ * whole of it is settled by `resumeSession` under the budget and the cap. The
+ * one thing enforced here is the cap itself, so a pause that ran past
+ * `MAX_PAUSE_SECONDS` ends the session on launch just as it would on a resume,
+ * rather than sitting paused forever.
  */
 export function reconcileSession(
   session: Session,
@@ -238,26 +237,18 @@ export function reconcileSession(
   const started = new Date(session.startedAt).getTime();
   const seen = Math.max(lastSeen ? new Date(lastSeen).getTime() : started, started);
 
-  let current = session;
   if (session.pausedAt) {
-    // Never earlier than the pause itself: a heartbeat older than `pausedAt`
-    // would otherwise wind the frozen clock backwards.
-    const until = Math.max(seen, new Date(session.pausedAt).getTime());
-    const settled = resumeSession(session, new Date(until));
-    if (settled.status !== 'running') return settled;
-    current = { ...settled, pausedAt: new Date(until).toISOString() };
+    return pauseSecondsRunning(session, now) > MAX_PAUSE_SECONDS
+      ? resumeSession(session, now)
+      : session;
   }
 
   const gap = (now.getTime() - seen) / 1000;
-  if (gap <= RECONCILE_GRACE_SECONDS) return current;
+  if (gap <= RECONCILE_GRACE_SECONDS) return session;
 
   // Freeze growth first: from here on, `growthAt` reads the value it had at
   // the last heartbeat rather than the value wall clock would suggest.
-  const frozen: Session = {
-    ...current,
-    lostSeconds: (current.lostSeconds ?? 0) + gap,
-    ...(current.pausedAt ? { pausedAt: now.toISOString() } : {}),
-  };
+  const frozen: Session = { ...session, lostSeconds: (session.lostSeconds ?? 0) + gap };
   // A caller that already charged this absence passes its own episode id, so
   // the delta rule keeps it as one lapse instead of billing it twice.
   const charged = updateDrift(frozen, driftId ?? `gap:${new Date(seen).toISOString()}`,
@@ -265,10 +256,10 @@ export function reconcileSession(
   if (charged.status !== 'running') return charged;
 
   // The block's window is its planned length plus any time already lost
-  // *before* this gap -- the settled pause included. Measured against the
-  // pre-gap figure on purpose: adding this gap too would move the finish line
-  // by exactly the amount just missed, and the check could never fire.
-  const windowEnd = started + session.plannedMinutes * 60000 + (current.lostSeconds ?? 0) * 1000;
+  // *before* this gap. Measured against the pre-gap figure on purpose: adding
+  // this gap too would move the finish line by exactly the amount just missed,
+  // and the check could never fire.
+  const windowEnd = started + session.plannedMinutes * 60000 + (session.lostSeconds ?? 0) * 1000;
   return now.getTime() >= windowEnd ? endSession(charged, 'abandoned', now) : charged;
 }
 
@@ -282,6 +273,9 @@ export function endSession(
     ...session,
     status,
     growth,
+    // Read above through `growthAt` if the clock was stopped; a finished
+    // session has no clock to stop, so the marker does not outlive it.
+    pausedAt: undefined,
     // Giving up early leaves a mark, but you keep what you actually grew.
     health: status === 'abandoned' ? clamp(session.health - 0.35) : session.health,
     endedAt: now.toISOString(),

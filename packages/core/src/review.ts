@@ -77,11 +77,15 @@ export function weekReview(state: AppState, now: Date = new Date(), weeksAgo = 0
   for (let i = 0; i < 7; i++) {
     const day = new Date(start);
     day.setDate(day.getDate() + i);
-    // A block on Thursday is not missed on Wednesday. Days the week has not
-    // reached yet are not counted against you.
     if (day.getTime() > now.getTime()) break;
     for (const block of state.blocks) {
       if (!occursOn(block, day)) continue;
+      // A block on Thursday is not missed on Wednesday, and this morning's
+      // block is not missed at breakfast. An instance is planned once the
+      // moment it could still have been kept has passed -- the same line
+      // `missedBlocksToday` draws -- so the count never runs ahead of you.
+      const due = windowFor(block, day).start.getTime() + block.graceMinutes * 60000;
+      if (due > now.getTime()) continue;
       planned++;
       if (wasKept(block, day, state.sessions)) kept++;
     }

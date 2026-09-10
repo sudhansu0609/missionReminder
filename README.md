@@ -29,7 +29,7 @@ behind.
 
 ```bash
 npm install
-npm test            # 217 behaviour checks over the rules and the storage, no framework
+npm test            # 219 behaviour checks over the rules and the storage, no framework
 npm run typecheck   # both apps and both packages
 npm run lint        # eslint, flat config, no stylistic rules
 npm run desktop     # builds the shared packages, then opens the Electron app
@@ -228,8 +228,9 @@ last week* toggle. It shows how many of the week's blocks you kept against how
 many you planned, every tree you grew alive or withered, which goals the hours
 actually went into, the streak, and the blocks waiting for you next week.
 
-A block counts as *planned* once the day has arrived — a Thursday block is not
-missed on Wednesday — and as *kept* when a session started inside its window
+A block counts as *planned* once its start and grace have passed — a Thursday
+block is not missed on Wednesday, and this morning's is not missed at
+breakfast — and as *kept* when a session started inside its window
 (five minutes early through to the end of the grace period plus the block) and
 finished. The week runs local Monday to Sunday, and a session belongs to the
 week it ended in.
@@ -285,7 +286,7 @@ against it, so you can see effort and completion diverge.
 
 ## Verified
 
-`npm test` — 217 checks, all passing:
+`npm test` — 219 checks, all passing:
 
 - pause: growth frozen while stopped, the paused seconds owed back as lost
   time, one budget shared across a session, the excess charged like any other

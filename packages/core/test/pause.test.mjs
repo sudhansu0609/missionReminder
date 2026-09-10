@@ -78,26 +78,36 @@ ok('tick completes it once resumed and the time is served',
 
 // --- reconcile -------------------------------------------------------------
 // Paused at 09:10, the app kept beating until 09:12, then it was quit and
-// reopened at 09:14. The pause up to the last beat is a pause; the two minutes
-// after it are a gap nobody watched.
-const quit = reconcileSession(pauseSession(fresh(), at('09:10')),
-                              at('09:12').toISOString(), at('09:14'));
-ok('reconcile of a paused session keeps the frozen growth',
+// reopened at 09:14. A stopped clock cannot grow whether the app is watching
+// or not, so there is nothing to correct: it is all one pause, settled on
+// resume under the budget like any other.
+const stopped2 = pauseSession(fresh(), at('09:10'));
+const quit = reconcileSession(stopped2, at('09:12').toISOString(), at('09:14'));
+ok('reconcile leaves a paused session alone', quit === stopped2);
+ok('and its growth stays frozen',
    close(growthAt(quit, at('09:14')), 0.2), growthAt(quit, at('09:14')).toFixed(3));
-ok('it is still paused afterwards', Boolean(quit.pausedAt) && quit.status === 'running');
-ok('the pause is banked and so is the gap', quit.lostSeconds === 240, String(quit.lostSeconds));
-ok('the unwatched stretch is charged as a lapse',
-   close(quit.health, 1 - driftPenalty(120)), quit.health.toFixed(3));
-ok('the pause itself was free', quit.drifts.some(
-   (d) => d.reason === 'manual-pause' && d.seconds === 120));
+const afterQuit = resumeSession(quit, at('09:14'));
+ok('resuming after the quit charges the whole stretch as one pause',
+   afterQuit.lostSeconds === 240 && afterQuit.drifts.length === 1 &&
+   afterQuit.drifts[0].reason === 'manual-pause' && afterQuit.drifts[0].seconds === 240,
+   String(afterQuit.lostSeconds));
+ok('and closing the app during a pause cost no health', afterQuit.health === 1,
+   String(afterQuit.health));
+// The phone: JS frozen in the background for four minutes mid-pause. The
+// heartbeat is stale, and that must not read as a lapse.
+const pocket = reconcileSession(pauseSession(fresh(), at('09:10')),
+                                at('09:10').toISOString(), at('09:14'), 'ep1');
+ok('a paused session backgrounded on the phone is not charged as a lapse',
+   pocket.health === 1 && pocket.drifts.length === 0 && Boolean(pocket.pausedAt));
 
-// A pause the app was watching all along, past the cap, ends the same way a
-// resume would have.
+// A pause past the cap ends the same way a resume would have.
 const abandonedByGap = reconcileSession(pauseSession(fresh(), at('09:10')),
                                         at('09:40').toISOString(), at('09:41'));
 ok('a pause past the cap is an abandonment even without a resume',
    abandonedByGap.status === 'abandoned' && close(abandonedByGap.growth, 0.2),
    abandonedByGap.growth.toFixed(3));
+ok('and the marker does not outlive the session',
+   abandonedByGap.pausedAt === undefined && walked.pausedAt === undefined);
 
 // An unpaused session must behave exactly as it did before pause existed.
 const untouched = fresh();

@@ -6,6 +6,7 @@ import {
   type AppState, type Block, type Drift, type Goal, type Mission, type Session,
   type Settings, type Theme,
 } from '@mission/core';
+import { useMinute } from './hooks';
 import {
   clearHeartbeat, createLocalRepo, createSupabaseClient, createSyncRepo, guessType,
   readHeartbeat, uploadMedia, writeHeartbeat, HEARTBEAT_SECONDS,
@@ -362,9 +363,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   // Everything the tray menu offers, pushed to main whenever it changes. The
   // menu is only a view of this: main never works out what the next block is.
+  // The clock moves the answer too: at 09:51 the 09:00 block is no longer the
+  // next one, whether or not anything else changed.
+  const minute = useMinute();
   const trayNext = useMemo(
     () => blockToStartNow(state.blocks, state.sessions, new Date()),
-    [state.blocks, state.sessions],
+    [state.blocks, state.sessions, minute],
   );
   useEffect(() => {
     window.mission?.setTrayState({

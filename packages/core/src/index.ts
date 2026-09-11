@@ -5,6 +5,7 @@ export * from './session.js';
 export * from './goals.js';
 export * from './schedule.js';
 export * from './nudge.js';
+export * from './mirror.js';
 export * from './review.js';
 export * from './shortcuts.js';
 export * from './drafts.js';

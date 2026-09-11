@@ -1,4 +1,16 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import type { RuntimeMirror } from '@mission/core';
+
+/** The shape forwarded to Dexter when DEXTER_URL is set. Off by default. */
+export interface ForwardedNudge {
+  kind: string;
+  title: string;
+  body: string;
+  urgency: 'low' | 'normal' | 'high';
+  screen?: string;
+  why?: string;
+  at: string;
+}
 
 /** What the tray menu needs to know to be useful without opening the window. */
 export interface TrayState {
@@ -26,6 +38,19 @@ const api = {
   readMedia: (url: string): Promise<{ bytes: ArrayBuffer; name: string } | null> =>
     ipcRenderer.invoke('read-media', url),
   openExternal: (url: string) => ipcRenderer.invoke('open-external', url),
+  /**
+   * Publish "what is going on right now" for the rest of the machine to read
+   * (GUARDIAN_PLAN.md MR1). The renderer owns the state, so it builds the
+   * payload; main only writes it to disk. Fire and forget.
+   */
+  mirrorRuntime: (mirror: RuntimeMirror) => ipcRenderer.invoke('runtime-mirror', mirror),
+  /**
+   * Hand one nudge to Dexter as well as to the system tray, so the owner gets
+   * one reminder in the place they are already looking instead of two. Does
+   * nothing unless DEXTER_URL is set, and never reports failure -- the local
+   * notification has already fired by the time this is called.
+   */
+  forwardNudge: (nudge: ForwardedNudge) => ipcRenderer.invoke('forward-nudge', nudge),
   onFocusChange: (cb: (focused: boolean) => void) => {
     const h = (_e: unknown, v: boolean) => cb(v);
     ipcRenderer.on('focus-changed', h);

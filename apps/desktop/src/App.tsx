@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { blockToStartNow, computeNudges, dayKey, type ShortcutAction } from '@mission/core';
 import { useStore } from './store';
 import { useMinute, useShortcuts } from './hooks';
+import { useRuntimeMirror } from './runtime-mirror';
 import { Today } from './screens/Today';
 import { Goals } from './screens/Goals';
 import { Blocks } from './screens/Blocks';
@@ -59,9 +60,20 @@ export function App() {
       const body = n.why ? `${n.body}\n\n${n.why}` : n.body;
       window.mission?.notify(n.title, body, n.urgency === 'high', n.screen);
       if (n.urgency === 'high') window.mission?.flash();
+      // Second, and only if DEXTER_URL is set: the same reminder in Dexter's
+      // pop-up rather than a second toast beside this one. Fire and forget --
+      // the notification above has already gone out.
+      window.mission?.forwardNudge({
+        kind: n.kind, title: n.title, body: n.body, urgency: n.urgency,
+        screen: n.screen, why: n.why, at: new Date().toISOString(),
+      });
     }
     saveFired(fired.current);
   }, [ready, minute]);
+
+  // Leave "what is going on right now" on disk for Dexter, so it can see a
+  // block running and keep quiet through it instead of nagging in parallel.
+  useRuntimeMirror(state, active, ready);
 
   // A clicked notification knows what it was about, so it lands there.
   useEffect(() => window.mission?.onOpenScreen((screen) => {

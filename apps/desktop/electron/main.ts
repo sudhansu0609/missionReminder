@@ -4,10 +4,13 @@ import {
 } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs/promises';
+import fsSync from 'node:fs';
+import os from 'node:os';
 import crypto from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { leafPng } from './png';
-import type { TrayAction, TrayState } from './preload';
+import type { ForwardedNudge, TrayAction, TrayState } from './preload';
+import type { RuntimeMirror } from '@mission/core';
 
 const DIST = path.join(__dirname, '../dist');
 const DEV_URL = process.env.VITE_DEV_SERVER_URL;
@@ -236,4 +239,102 @@ ipcMain.handle('read-media', async (_e, url: string) => {
 
 ipcMain.handle('open-external', (_e, url: string) => {
   if (/^https?:/i.test(url)) void shell.openExternal(url);
+});
+
+// ─────────────────── the runtime mirror (GUARDIAN_PLAN.md MR1) ───────────────────
+
+/**
+ * `%LOCALAPPDATA%\MissionReminder\runtime.json` on Windows, the platform
+ * equivalent elsewhere. `MISSION_REMINDER_RUNTIME` overrides it outright, which
+ * is how a test or a second instance points somewhere harmless.
+ *
+ * Deliberately not `app.getPath('userData')`: on Windows that is Roaming, and
+ * a file that says "a block is running right now" has no business following the
+ * user to another machine.
+ */
+function runtimePath(): string {
+  const override = process.env.MISSION_REMINDER_RUNTIME;
+  if (override && override.trim()) return override.trim();
+  const base =
+    process.platform === 'win32'
+      ? process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local')
+      : process.platform === 'darwin'
+        ? path.join(os.homedir(), 'Library', 'Application Support')
+        : process.env.XDG_STATE_HOME || path.join(os.homedir(), '.local', 'state');
+  return path.join(base, 'MissionReminder', 'runtime.json');
+}
+
+/**
+ * Write the mirror where anyone can read it, without ever letting a reader see
+ * half a file: a sibling `.tmp` and a rename, which is atomic on both NTFS and
+ * POSIX. Failures are swallowed — a full disk or a locked folder must not take
+ * the app down over a courtesy file.
+ */
+ipcMain.handle('runtime-mirror', async (_e, mirror: RuntimeMirror) => {
+  const file = runtimePath();
+  try {
+    await fs.mkdir(path.dirname(file), { recursive: true });
+    const tmp = `${file}.tmp`;
+    await fs.writeFile(tmp, JSON.stringify(mirror, null, 2), 'utf8');
+    await fs.rename(tmp, file);
+  } catch (err) {
+    console.warn('[runtime-mirror] could not write', file, err);
+  }
+});
+
+/**
+ * The file describes *now*, so leaving it behind would tell Dexter a block is
+ * running long after the app closed. Synchronous on purpose: `will-quit` does
+ * not wait for promises.
+ */
+function clearRuntimeMirror() {
+  const file = runtimePath();
+  try {
+    fsSync.rmSync(file, { force: true });
+    fsSync.rmSync(`${file}.tmp`, { force: true });
+  } catch { /* the file is a courtesy; failing to remove it is not worth a dialog */ }
+}
+
+app.on('will-quit', clearRuntimeMirror);
+
+// ─────────────────── optional: hand a nudge to Dexter as well ───────────────────
+
+/** Where Dexter listens. Unset (the default) means this whole path is off. */
+const dexterUrl = () => (process.env.DEXTER_URL || '').trim().replace(/\/+$/, '');
+
+const TOKEN_FILE = () =>
+  process.env.DEXTER_TOKEN_FILE
+  || 'B:\\youtubeProjects\\Buzzcaf_Media\\dexter\\data\\.session_token';
+
+function dexterToken(): string | null {
+  try {
+    const text = fsSync.readFileSync(TOKEN_FILE(), 'utf8').trim();
+    return text || null;
+  } catch {
+    return null; // Dexter has never run, or is not on this machine.
+  }
+}
+
+/**
+ * Post one nudge to Dexter's pop-up. Off unless `DEXTER_URL` is set, and silent
+ * whatever happens: the system notification has already fired by the time this
+ * runs, so a Dexter that is down costs the owner nothing. Nothing is retried —
+ * a nudge that arrives late is worse than one that never arrives.
+ */
+ipcMain.handle('forward-nudge', async (_e, nudge: ForwardedNudge) => {
+  const base = dexterUrl();
+  if (!base) return;
+  try {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const token = dexterToken();
+    if (token) headers['X-Dexter-Token'] = token;
+    await fetch(`${base}/api/dexter/nudge`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(nudge),
+      signal: AbortSignal.timeout(1500),
+    });
+  } catch {
+    // Silent by design. See the comment above.
+  }
 });

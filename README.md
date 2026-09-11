@@ -29,7 +29,7 @@ behind.
 
 ```bash
 npm install
-npm test            # 219 behaviour checks over the rules and the storage, no framework
+npm test            # 255 behaviour checks over the rules and the storage, no framework
 npm run typecheck   # both apps and both packages
 npm run lint        # eslint, flat config, no stylistic rules
 npm run desktop     # builds the shared packages, then opens the Electron app
@@ -316,3 +316,4 @@ against it, so you can see effort and completion diverge.
 
 Both apps typecheck clean and `npm run lint` is silent. The desktop app builds.
 The same four gates run in GitHub Actions on every push.
+# missionReminder
